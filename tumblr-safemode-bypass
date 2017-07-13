@@ -1,0 +1,46 @@
+// ==UserScript==
+// @name         Tumblr safemode bypass
+// @namespace    
+// @version      0.1
+// @description  Bypasses tumblr's safe mode
+// @author       You
+// @match        https://www.tumblr.com/*
+// @grant        GM_xmlhttpRequest
+// @require      https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js
+// @connect      tumblr.com
+// ==/UserScript==
+
+(function() {
+    'use strict';
+    var getpost = function(tumblog, postid) {
+        GM_xmlhttpRequest({
+            method: "GET",
+            url: "https://"+tumblog+".tumblr.com/post/"+postid+"/embed",
+            onload: function(response) {
+                var key = $(response.response).filter("#bootloader").attr("data-bootstrap").match(/embed_key":"[^"]*/)[0].replace("embed_key\x22:\x22", "");
+                GM_xmlhttpRequest({
+                    method: "GET",
+                    url: "https://embed.tumblr.com/embed/post/"+key+"/"+postid,
+                    onload: function(response) {
+                        var post = $(response.response);
+                        $("#post_"+postid).html(response.response);
+                        alert("hola");
+                    }
+                });
+
+            }
+        });
+    };
+    $(".post_content_inner").click(function()
+                    {
+        
+        alert("fuck");
+        debugger;
+        var postid = $(this).parents().filter(".post").attr("data-post-id");
+        var tumblog = $(this).parents().filter(".post").attr("data-tumblelog");
+        getpost(tumblog, postid);
+    }
+                   );
+
+    // Your code here...
+})();
