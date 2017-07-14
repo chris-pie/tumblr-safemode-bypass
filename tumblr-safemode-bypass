@@ -1,46 +1,92 @@
 // ==UserScript==
-// @name         Tumblr safemode bypass
-// @namespace    
-// @version      0.1
+// @name         Tumblr safe mode bypasser
+// @namespace    http://tampermonkey.net/
+// @version      0.2
 // @description  Bypasses tumblr's safe mode
-// @author       You
+// @author       chirs-pie
 // @match        https://www.tumblr.com/*
-// @grant        GM_xmlhttpRequest
+// @match        https://embed.tumblr.com/embed/post/*
+// @grant        GM_setValue
+// @grant        GM_getValue
+// @grant        GM_listValues
+// @grant        GM_deleteValue
 // @require      https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js
 // @connect      tumblr.com
 // ==/UserScript==
 
 (function() {
     'use strict';
-    var getpost = function(tumblog, postid) {
-        GM_xmlhttpRequest({
-            method: "GET",
-            url: "https://"+tumblog+".tumblr.com/post/"+postid+"/embed",
-            onload: function(response) {
-                var key = $(response.response).filter("#bootloader").attr("data-bootstrap").match(/embed_key":"[^"]*/)[0].replace("embed_key\x22:\x22", "");
-                GM_xmlhttpRequest({
-                    method: "GET",
-                    url: "https://embed.tumblr.com/embed/post/"+key+"/"+postid,
-                    onload: function(response) {
-                        var post = $(response.response);
-                        $("#post_"+postid).html(response.response);
-                        alert("hola");
+    if(window.location.href.startsWith("https://embed.tumblr.com/embed/post/"))
+    {
+        var postid = $(".post").attr("data-post-id");
+        var message =
+            {
+                identifier: "sc-bp-"+postid,
+                data: $(".post").html()
+            };
+        window.parent.postMessage(message, "*");
+        return;
+    }
+    else
+    {
+        try
+        {
+            if(window.top !== window.self)
+                return;
+        }
+        catch(err)
+        {
+            return;
+        }
+    }
+    {
+        var storedvalues = GM_listValues();
+        for (var i = 0; i < storedvalues.length; i++) 
+            GM_deleteValue(storedvalues[i]);
+        var openframe = function(tumblog, postid, postkey) {
+            var frame = $('<iframe id="frame-'+postid+'" src="https://embed.tumblr.com/embed/post/'+postkey+'/'+postid+'" class="sc-bp-frame"/>')
+            .css("width", "2000px").css("height", "2000px").css("visibility", "hidden");
+            $("#post_"+postid).append(frame);
+        };
+        var replacecontent = function(postid)
+        {
+            var htmlstring = GM_getValue("post_"+postid);
+            var post = $(htmlstring);
+            var husk = $("#post_"+postid);
+            husk.find(".post_content_inner").removeClass("safemode").addClass("clearfix").empty().append(post.filter(".post-content").children());
+
+
+        };
+        setInterval(function()
+                    {
+            $(".post_content_inner.safemode:not(.sc-bp-done)").click(function()
+                                                                     {
+                debugger;
+                var parentpost = $(this).parents().filter(".post");
+                var postid = parentpost.attr("data-post-id");
+                var tumblog = parentpost.attr("data-tumblelog");
+                var postkey = parentpost.attr("data-json").match(/embed_key":"[^"]*/)[0].replace("embed_key\x22:\x22", "");
+                var stored = GM_getValue("post_"+postid, "false");
+                function receiveMessage(event)
+                {
+                    if(event.origin === 'https://embed.tumblr.com' && event.data.identifier === "sc-bp-"+postid)
+                    {
+                        GM_setValue("post_"+postid, event.data.data);
+                        window.removeEventListener("message", receiveMessage);
+                        $("#frame-"+postid).remove();
+                        replacecontent(postid);
                     }
-                });
+                }
+                if (stored === "false")
+                {
+                    window.addEventListener("message", receiveMessage, false);
+                    openframe(tumblog, postid, postkey);
+                }
+                else replacecontent(postid);
 
             }
-        });
-    };
-    $(".post_content_inner").click(function()
-                    {
-        
-        alert("fuck");
-        debugger;
-        var postid = $(this).parents().filter(".post").attr("data-post-id");
-        var tumblog = $(this).parents().filter(".post").attr("data-tumblelog");
-        getpost(tumblog, postid);
+            ).addClass("sc-bp-done");
+        }, 500);
     }
-                   );
-
     // Your code here...
 })();
