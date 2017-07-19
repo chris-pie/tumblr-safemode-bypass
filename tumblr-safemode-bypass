@@ -52,7 +52,13 @@
             var htmlstring = GM_getValue("post_"+postid);
             var post = $(htmlstring);
             var husk = $("#post_"+postid);
+            //Add content
             husk.find(".post_content_inner").removeClass("safemode").addClass("clearfix").empty().append(post.filter(".post-content").children());
+            //Add tags and source
+            debugger;
+            post.filter(".post-tags").removeClass("post-tags").addClass("post_tags")
+                .children().filter(".post-tags-inner").removeClass("post-tags-inner").addClass("post_tags_inner fadeable fadeable-source")
+                .children().filter(".post-tag").removeClass("post-tag").addClass("post_tag");
 
 
         };
