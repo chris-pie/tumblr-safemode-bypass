@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Tumblr safe mode bypasser
-// @namespace    http://tampermonkey.net/
+// @namespace    https://github.com/chris-pie/tumblr-safemode-bypass
 // @version      0.2
 // @description  Bypasses tumblr's safe mode
 // @author       chirs-pie
@@ -27,7 +27,7 @@
         window.parent.postMessage(message, "*");
         return;
     }
-    else
+   /* else
     {
         try
         {
@@ -38,10 +38,9 @@
         {
             return;
         }
-    }
-    {
+    }*/
         var storedvalues = GM_listValues();
-        for (var i = 0; i < storedvalues.length; i++) 
+        for (var i = 0; i < storedvalues.length; i++)
             GM_deleteValue(storedvalues[i]);
         var openframe = function(tumblog, postid, postkey) {
             var frame = $('<iframe id="frame-'+postid+'" src="https://embed.tumblr.com/embed/post/'+postkey+'/'+postid+'" class="sc-bp-frame"/>')
@@ -87,6 +86,5 @@
             }
             ).addClass("sc-bp-done");
         }, 500);
-    }
     // Your code here...
 })();
