@@ -1,15 +1,12 @@
 // ==UserScript==
 // @name         Tumblr safe mode bypasser
 // @namespace    https://github.com/chris-pie/tumblr-safemode-bypass
-// @version      0.2
+// @version      0.3
 // @description  Bypasses tumblr's safe mode
 // @author       chirs-pie
 // @match        https://www.tumblr.com/*
 // @match        https://embed.tumblr.com/embed/post/*
-// @grant        GM_setValue
-// @grant        GM_getValue
-// @grant        GM_listValues
-// @grant        GM_deleteValue
+// @grant        GM_xmlhttpRequest
 // @require      https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js
 // @connect      tumblr.com
 // ==/UserScript==
@@ -27,7 +24,7 @@
         window.parent.postMessage(message, "*");
         return;
     }
-   /* else
+    /* else
     {
         try
         {
@@ -39,58 +36,84 @@
             return;
         }
     }*/
-        var storedvalues = GM_listValues();
-        for (var i = 0; i < storedvalues.length; i++)
-            GM_deleteValue(storedvalues[i]);
-        var openframe = function(tumblog, postid, postkey) {
-            var frame = $('<iframe id="frame-'+postid+'" src="https://embed.tumblr.com/embed/post/'+postkey+'/'+postid+'" class="sc-bp-frame"/>')
-            .css("width", "2000px").css("height", "2000px").css("visibility", "hidden");
-            $("#post_"+postid).append(frame);
-        };
-        var replacecontent = function(postid)
-        {
-            var htmlstring = GM_getValue("post_"+postid);
-            var post = $(htmlstring);
-            var husk = $("#post_"+postid);
-            //Add content
-            husk.find(".post_content_inner").removeClass("safemode").addClass("clearfix").empty().append(post.filter(".post-content").children());
-            //Add tags and source
+    var openframe = function(tumblog, postid, postkey) {
+        var frame = $('<iframe id="frame-'+postid+'" src="https://embed.tumblr.com/embed/post/'+postkey+'/'+postid+'" class="sc-bp-frame"/>')
+        .css("width", window.top.innerWidth.toString() + "px").css("height", window.top.innerHeight.toString() + "px").css("visibility", "hidden")
+        .css("position", "fixed");
+        $("body").append(frame);
+    };
+    var replacecontent = function(postid, post, parentpost)
+    {
+        //Add content
+        post.find(".post-media-photo-embedded").each(function() {
+            $(this).attr("src",$(this).attr("data-full-src"));
+        });
+        var sourcehref = post.find(".post-source-link").attr("href");
+        var decodedurl = decodeURIComponent(sourcehref.match(/source\?url=[^&]*/)[0].replace("source?url=", ""));
+        post.find(".post-source-link").attr("href",decodedurl);
+
+        parentpost.find(".post_content_inner").removeClass("safemode").addClass("clearfix").empty().append(post.filter(".post-content").children());
+        //Add tags and source
+        debugger;
+        $('<div class="post-source-footer"></div>').append(post.find(".post-source-name-prefix")).append(post.find(".post-source-link"))
+            .appendTo(parentpost.find(".post_wrapper"));
+        post.filter(".post-tags").removeClass("post-tags").addClass("post_tags")
+            .children().filter(".post-tags-inner").removeClass("post-tags-inner").addClass("post_tags_inner fadeable fadeable-source")
+            .children().filter(".post-tag").removeClass("post-tag").addClass("post_tag");
+        post.find(".post_tag").each(function() {
+            $(this).attr("href", "www.tumblr.com/tagged/" +$(this).text().substring(1));
+        });
+        parentpost.removeClass("sc-bp-working");
+
+
+
+    };
+    setInterval(function()
+                {
+        $(".post_content_inner.safemode:not(.sc-bp-done)").click(function()
+                                                                 {
             debugger;
-            post.filter(".post-tags").removeClass("post-tags").addClass("post_tags")
-                .children().filter(".post-tags-inner").removeClass("post-tags-inner").addClass("post_tags_inner fadeable fadeable-source")
-                .children().filter(".post-tag").removeClass("post-tag").addClass("post_tag");
-
-
-        };
-        setInterval(function()
-                    {
-            $(".post_content_inner.safemode:not(.sc-bp-done)").click(function()
-                                                                     {
-                debugger;
-                var parentpost = $(this).parents().filter(".post");
-                var postid = parentpost.attr("data-post-id");
-                var tumblog = parentpost.attr("data-tumblelog");
-                var postkey = parentpost.attr("data-json").match(/embed_key":"[^"]*/)[0].replace("embed_key\x22:\x22", "");
-                var stored = GM_getValue("post_"+postid, "false");
-                function receiveMessage(event)
-                {
-                    if(event.origin === 'https://embed.tumblr.com' && event.data.identifier === "sc-bp-"+postid)
-                    {
-                        GM_setValue("post_"+postid, event.data.data);
-                        window.removeEventListener("message", receiveMessage);
-                        $("#frame-"+postid).remove();
-                        replacecontent(postid);
-                    }
-                }
-                if (stored === "false")
-                {
-                    window.addEventListener("message", receiveMessage, false);
-                    openframe(tumblog, postid, postkey);
-                }
-                else replacecontent(postid);
-
+            var parentpost = $(this).parents().filter(".post");
+            var postid = parentpost.attr("data-post-id");
+            var tumblog = parentpost.attr("data-tumblelog-name");
+            var postkey;
+            try
+            {
+                postkey = parentpost.attr("data-json").match(/embed_key":"[^"]*/)[0].replace("embed_key\x22:\x22", "");
+                get_embedded_post(postid, tumblog, postkey, parentpost);
             }
-            ).addClass("sc-bp-done");
-        }, 500);
+            catch (err) //we're in peepr and have to get that in a roundabout way
+            {
+                GM_xmlhttpRequest({
+                    method: "GET",
+                    url: "https://"+tumblog+".tumblr.com/post/"+postid+"/embed",
+                    onload: function(response) {
+                        postkey= $(response.response).filter("#bootloader").attr("data-bootstrap").match(/embed_key":"[^"]*/)[0].replace("embed_key\x22:\x22", "");
+                        get_embedded_post(postid, tumblog, postkey, parentpost);
+                    }
+                });
+            }
+        }).addClass("sc-bp-done");
+    }, 500);
+    function get_embedded_post(postid, tumblog, postkey, parentpost)
+    {
+        var working = parentpost.hasClass("sc-bp-working");
+        function receiveMessage(event)
+        {
+            if(event.origin === 'https://embed.tumblr.com' && event.data.identifier === "sc-bp-"+postid)
+            {
+                window.removeEventListener("message", receiveMessage);
+                $("#frame-"+postid).remove();
+                replacecontent(postid, $(event.data.data), parentpost);
+            }
+        }
+        if (working === false)
+        {
+            window.addEventListener("message", receiveMessage, false);
+            parentpost.addClass("sc-bp-working");
+            openframe(tumblog, postid, postkey);
+        }
+    }
+
     // Your code here...
 })();
